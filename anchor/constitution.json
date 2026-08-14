@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "blackvault-external-release-trust-anchor-v1",
+  "product": "BlackVault Sentinel",
+  "source_repository": "ProjetosCosaNostra/BlackVault_Sentinel",
+  "release_repository": "ProjetosCosaNostra/BlackVault_Sentinel_Releases",
+  "source_visibility": "private",
+  "release_visibility": "public",
+  "production_authority": true,
+  "private_source_allowed": false,
+  "source_main_is_production_authority": false,
+  "production_rule": "source-state-alone-does-not-authorize-release",
+  "authorization_requires": [
+    "protected-release-main",
+    "validated-release-attestation",
+    "explicit-promotion-gate"
+  ],
+  "automatic_source_merge": false,
+  "automatic_product_activation": false
+}
