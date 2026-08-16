@@ -1,0 +1,121 @@
+name: BlackVault Release Anchor
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "README.md"
+      - "anchor/**"
+      - "keys/**"
+      - "attestations/**"
+      - ".github/workflows/anchor-validation.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "README.md"
+      - "anchor/**"
+      - "keys/**"
+      - "attestations/**"
+      - ".github/workflows/anchor-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blackvault-release-anchor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate release anchor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate constitution
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+          $Path = "anchor/constitution.json"
+          if (-not (Test-Path -LiteralPath $Path)) { throw "anchor/constitution.json ausente." }
+          $Contract = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+          if ($Contract.id -ne "blackvault-external-release-trust-anchor-v1") { throw "Trust-anchor ID invalido." }
+          if ($Contract.source_repository -ne "ProjetosCosaNostra/BlackVault_Sentinel") { throw "Source repository invalido." }
+          if ($Contract.release_repository -ne "ProjetosCosaNostra/BlackVault_Sentinel_Releases") { throw "Release repository invalido." }
+          if ($Contract.production_authority -ne $true) { throw "production_authority precisa ser true." }
+          if ($Contract.private_source_allowed -ne $false) { throw "private_source_allowed precisa ser false." }
+          Write-Host "RELEASE TRUST ANCHOR CONSTITUTION: APROVADA"
+
+      - name: Validate cryptographic attestations
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $KeyFiles = @(Get-ChildItem -LiteralPath "keys" -Filter "*.json" -File -ErrorAction SilentlyContinue)
+          $AttestationFiles = @(Get-ChildItem -LiteralPath "attestations" -Filter "*.json" -File -ErrorAction SilentlyContinue)
+
+          if ($AttestationFiles.Count -eq 0) {
+              Write-Host "Nenhuma attestation publicada."
+              exit 0
+          }
+          if ($KeyFiles.Count -eq 0) { throw "Attestations existem sem trusted keys." }
+
+          $Trusted = @{}
+          foreach ($KeyFile in $KeyFiles) {
+              $Key = Get-Content -LiteralPath $KeyFile.FullName -Raw | ConvertFrom-Json
+              if ($Key.id -ne "blackvault-release-attestation-key-v1") { throw ("Key document invalido: {0}" -f $KeyFile.Name) }
+              if ([string]$Key.key_id -notmatch '^[0-9a-f]{64}$') { throw ("key_id invalido: {0}" -f $KeyFile.Name) }
+              if ($Key.algorithm -ne "ECDSA-P256-SHA256") { throw ("Algoritmo invalido: {0}" -f $KeyFile.Name) }
+              $Trusted[[string]$Key.key_id] = $Key
+          }
+
+          foreach ($File in $AttestationFiles) {
+              $Envelope = Get-Content -LiteralPath $File.FullName -Raw | ConvertFrom-Json
+              if ($Envelope.type -ne "blackvault-signed-release-attestation-envelope-v1") { throw ("Envelope type invalido: {0}" -f $File.Name) }
+              if ($Envelope.algorithm -ne "ECDSA-P256-SHA256") { throw ("Envelope algorithm invalido: {0}" -f $File.Name) }
+              if ($Envelope.signature_format -ne "IEEE-P1363") { throw ("Signature format invalido: {0}" -f $File.Name) }
+
+              $KeyId = [string]$Envelope.key_id
+              if (-not $Trusted.ContainsKey($KeyId)) { throw ("Untrusted key_id {0} em {1}" -f $KeyId,$File.Name) }
+              $Key = $Trusted[$KeyId]
+              $PayloadBytes = [Convert]::FromBase64String([string]$Envelope.payload_base64)
+              $Signature = [Convert]::FromBase64String([string]$Envelope.signature_base64)
+              $ComputedHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($PayloadBytes)).ToLowerInvariant()
+              if ($ComputedHash -ne [string]$Envelope.payload_sha256) { throw ("Payload hash divergente: {0}" -f $File.Name) }
+
+              $PublicBytes = [Convert]::FromBase64String([string]$Key.public_key_spki_base64)
+              $Verifier = [System.Security.Cryptography.ECDsa]::Create()
+              try {
+                  $BytesRead = 0
+                  [void]$Verifier.ImportSubjectPublicKeyInfo($PublicBytes,[ref]$BytesRead)
+                  $Ok = $Verifier.VerifyData(
+                      $PayloadBytes,
+                      $Signature,
+                      [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                      [System.Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation
+                  )
+              }
+              finally { $Verifier.Dispose() }
+              if (-not $Ok) { throw ("Assinatura invalida: {0}" -f $File.Name) }
+
+              $Payload = ([Text.Encoding]::UTF8.GetString($PayloadBytes)) | ConvertFrom-Json
+              if ($Payload.type -ne "blackvault-release-candidate-attestation-v1") { throw ("Payload type invalido: {0}" -f $File.Name) }
+              if ($Payload.source_repository -ne "ProjetosCosaNostra/BlackVault_Sentinel") { throw ("Source repository invalido: {0}" -f $File.Name) }
+              if ([string]$Payload.source_commit -notmatch '^[0-9a-f]{40}$') { throw ("Source commit invalido: {0}" -f $File.Name) }
+              if ($Payload.release_anchor_protected -ne $true) { throw ("release_anchor_protected precisa ser true: {0}" -f $File.Name) }
+              if ($Payload.source_main_merge_authorized -ne $false) { throw ("source_main_merge_authorized precisa ser false: {0}" -f $File.Name) }
+              if ($Payload.product_activation_authorized -ne $false) { throw ("product_activation_authorized precisa ser false: {0}" -f $File.Name) }
+              Write-Host ("CRYPTOGRAPHIC ATTESTATION VERIFIED: {0}" -f $File.Name)
+          }
+
+          Write-Host "CRYPTOGRAPHIC RELEASE ATTESTATIONS: APROVADAS"
