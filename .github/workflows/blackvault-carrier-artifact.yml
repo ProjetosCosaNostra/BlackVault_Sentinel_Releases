@@ -1,0 +1,34 @@
+name: BlackVault Carrier Artifact Handoff
+
+on:
+  push:
+    branches:
+      - autonomous/carrier-artifact-handoff-v1
+    paths:
+      - 'bridge_trigger/**'
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download current encrypted carrier
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2 \
+            -o current.bvenc \
+            https://github.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/releases/download/blackvault-chatgpt-evidence-current-v1/current.bvenc
+          test -s current.bvenc
+          sha256sum current.bvenc
+
+      - name: Upload carrier artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackvault-current-carrier
+          path: current.bvenc
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
