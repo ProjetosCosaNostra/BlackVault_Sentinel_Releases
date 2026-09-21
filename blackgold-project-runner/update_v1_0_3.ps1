@@ -59,7 +59,43 @@ if ($pending) {
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Milliseconds 500
 & $RunnerPath
+
+$applyResultPath = Join-Path $ControlRepo 'project_runner\jobs\outbox\orcamento-home-approved-v13-apply-002.json'
+if (-not (Test-Path -LiteralPath $applyResultPath)) {
+    throw 'O Runner nao publicou o resultado do patch da Home.'
+}
+$applyResult = Get-Content -LiteralPath $applyResultPath -Raw | ConvertFrom-Json
+if ($applyResult.status -ne 'success') {
+    throw ("Patch da Home reprovado e revertido: " + $applyResult.error)
+}
+
+& $git -C $ControlRepo fetch origin $ControlBranch | Out-Null
+& $git -C $ControlRepo reset --hard ("origin/" + $ControlBranch) | Out-Null
+
+$smokePath = Join-Path $jobDir '006-orcamento-home-approved-v13-smoke-001.json'
+$smokeJson = @'
+{
+  "schema": "blackgold.project-runner.job.v1",
+  "id": "orcamento-home-approved-v13-smoke-001",
+  "project": "orcamento_no_ponto",
+  "action": "build_install_launch_screenshot",
+  "args": {}
+}
+'@
+[IO.File]::WriteAllText($smokePath,$smokeJson,[Text.UTF8Encoding]::new($false))
+& $git -C $ControlRepo add -- 'project_runner/jobs/inbox/006-orcamento-home-approved-v13-smoke-001.json'
+$smokePending = & $git -C $ControlRepo status --porcelain -- 'project_runner/jobs/inbox/006-orcamento-home-approved-v13-smoke-001.json'
+if ($smokePending) {
+    & $git -C $ControlRepo config user.name 'BlackGold Project Runner Installer'
+    & $git -C $ControlRepo config user.email 'blackgold-project-runner@local.invalid'
+    & $git -C $ControlRepo commit -m 'runner: queue approved Home V13 smoke validation' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao registrar smoke job.' }
+    & $git -C $ControlRepo push origin $ControlBranch | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao publicar smoke job.' }
+}
+
+& $RunnerPath
 Write-Host ''
 Write-Host 'BLACKGOLD PROJECT RUNNER ATUALIZADO PARA V1.0.3' -ForegroundColor Green
 Write-Host 'Backup de patch movido para caminho curto e confiavel.' -ForegroundColor Cyan
-Write-Host 'A tarefa foi reativada; a Home aprovada foi enfileirada e executada.' -ForegroundColor Cyan
+Write-Host 'Home aplicada com build aprovado; validacao em emulador foi disparada.' -ForegroundColor Cyan
