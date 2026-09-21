@@ -1,0 +1,41 @@
+name: Build Orcamento Ecosystem Preview
+
+on:
+  push:
+    branches:
+      - orcamento-preview-build-20260921
+    paths:
+      - 'preview-android/**'
+      - '.github/workflows/build-orcamento-preview.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        run: gradle -p preview-android :app:assembleDebug --stacktrace
+      - name: Collect APK
+        run: |
+          mkdir -p artifact
+          cp preview-android/app/build/outputs/apk/debug/app-debug.apk artifact/ORCAMENTO_NO_PONTO_ECOSYSTEM_PREVIEW.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORCAMENTO_NO_PONTO_ECOSYSTEM_PREVIEW
+          path: artifact/ORCAMENTO_NO_PONTO_ECOSYSTEM_PREVIEW.apk
+          if-no-files-found: error
