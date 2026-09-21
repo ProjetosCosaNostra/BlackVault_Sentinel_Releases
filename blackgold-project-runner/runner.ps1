@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.2'
+$RunnerVersion = '1.0.3'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -266,9 +266,9 @@ function Apply-Patch([object]$Project,[object]$Job,[string]$JobLog) {
     if (-not (Test-Path -LiteralPath $payloadRoot)) { throw "PAYLOAD_NOT_FOUND: $payloadRel" }
 
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $backup = Join-Path $Project.root ("99_Backups\BPR\$timestamp")
+    $backup = Join-Path $Base ("backups\$($Project.id)\$timestamp")
     $backupFiles = Join-Path $backup 'files'
-    New-Item -ItemType Directory -Force -Path $backupFiles | Out-Null
+    [IO.Directory]::CreateDirectory($backupFiles) | Out-Null
 
     $changed = @()
     $records = @()
@@ -299,7 +299,7 @@ function Apply-Patch([object]$Project,[object]$Job,[string]$JobLog) {
             $backupFile = ''
             if ($existed) {
                 $backupFile = Join-Path $backupFiles (('{0:D3}.bak' -f $index))
-                Copy-Item -LiteralPath $destination -Destination $backupFile -Force
+                [IO.File]::Copy($destination, $backupFile, $true)
             }
             $targetDir = Split-Path -Parent $destination
             if ($targetDir) { New-Item -ItemType Directory -Force -Path $targetDir | Out-Null }
@@ -316,7 +316,11 @@ function Apply-Patch([object]$Project,[object]$Job,[string]$JobLog) {
     } catch {
         for ($i=$records.Count-1; $i -ge 0; $i--) {
             $rec=$records[$i]
-            if ($rec.existed) { Copy-Item -LiteralPath $rec.backup -Destination $rec.destination -Force }
+            if ($rec.existed) {
+                $restoreDir = Split-Path -Parent $rec.destination
+                if ($restoreDir) { [IO.Directory]::CreateDirectory($restoreDir) | Out-Null }
+                [IO.File]::Copy($rec.backup, $rec.destination, $true)
+            }
             else { Remove-Item -LiteralPath $rec.destination -Force -ErrorAction SilentlyContinue }
         }
         throw
