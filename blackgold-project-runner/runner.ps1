@@ -460,127 +460,52 @@ try {
         try {
             $candidateJob = Read-JsonFile $candidate.FullName
             $candidateId = [string]$candidateJob.id
-            if ($candidateId -notmatch '^[A-Za-z0-9._-]+
-            $jobLog=Join-Path $LogsDir ($jobId + '.log')
-            $started=Get-Date
-            try {
-                $data=Invoke-Job $job $jobLog
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='success'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$data
-                    error=$null
-                }
-            } catch {
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='error'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$null
-                    error=$_.Exception.Message
-                }
-            }
-            Write-JsonFile $result $resultPath
-        }
-    }
-
-    Write-Heartbeat
-    Publish-ControlChanges
-}
-finally {
-    if ($LockStream) { $LockStream.Dispose() }
-}
-) { continue }
+            if ($candidateId -notmatch '^[A-Za-z0-9._-]+$') { continue }
             $candidateResult = Join-Path $outbox ($candidateId + '.json')
             if (-not (Test-Path -LiteralPath $candidateResult)) {
                 $jobFile = $candidate
                 break
             }
-        } catch {
+        }
+        catch {
             continue
         }
     }
 
     if ($jobFile) {
-        $job=Read-JsonFile $jobFile.FullName
-        $jobId=[string]$job.id
-        if ($jobId -notmatch '^[A-Za-z0-9._-]+
-            $jobLog=Join-Path $LogsDir ($jobId + '.log')
-            $started=Get-Date
+        $job = Read-JsonFile $jobFile.FullName
+        $jobId = [string]$job.id
+        if ($jobId -notmatch '^[A-Za-z0-9._-]+$') { throw "INVALID_JOB_ID: $jobId" }
+
+        $resultPath = Join-Path $outbox ($jobId + '.json')
+        if (-not (Test-Path -LiteralPath $resultPath)) {
+            $jobLog = Join-Path $LogsDir ($jobId + '.log')
+            $started = Get-Date
             try {
-                $data=Invoke-Job $job $jobLog
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='success'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$data
-                    error=$null
-                }
-            } catch {
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='error'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$null
-                    error=$_.Exception.Message
+                $data = Invoke-Job $job $jobLog
+                $result = [ordered]@{
+                    schema = 'blackgold.project-runner.result.v1'
+                    id = $jobId
+                    action = [string]$job.action
+                    project = [string]$job.project
+                    status = 'success'
+                    started_at = $started.ToString('o')
+                    finished_at = (Get-Date -Format o)
+                    data = $data
+                    error = $null
                 }
             }
-            Write-JsonFile $result $resultPath
-        }
-    }
-
-    Write-Heartbeat
-    Publish-ControlChanges
-}
-finally {
-    if ($LockStream) { $LockStream.Dispose() }
-}
-) { throw "INVALID_JOB_ID: $jobId" }
-        $resultPath=Join-Path $outbox ($jobId + '.json')
-        if (-not (Test-Path -LiteralPath $resultPath)) {
-            $jobLog=Join-Path $LogsDir ($jobId + '.log')
-            $started=Get-Date
-            try {
-                $data=Invoke-Job $job $jobLog
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='success'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$data
-                    error=$null
-                }
-            } catch {
-                $result=[ordered]@{
-                    schema='blackgold.project-runner.result.v1'
-                    id=$jobId
-                    action=[string]$job.action
-                    project=[string]$job.project
-                    status='error'
-                    started_at=$started.ToString('o')
-                    finished_at=(Get-Date -Format o)
-                    data=$null
-                    error=$_.Exception.Message
+            catch {
+                $result = [ordered]@{
+                    schema = 'blackgold.project-runner.result.v1'
+                    id = $jobId
+                    action = [string]$job.action
+                    project = [string]$job.project
+                    status = 'error'
+                    started_at = $started.ToString('o')
+                    finished_at = (Get-Date -Format o)
+                    data = $null
+                    error = $_.Exception.Message
                 }
             }
             Write-JsonFile $result $resultPath
