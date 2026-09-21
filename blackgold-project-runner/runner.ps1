@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.5'
+$RunnerVersion = '1.0.6'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -106,6 +106,23 @@ function Get-AndroidRoot([object]$Project) {
     return $root
 }
 
+function Invoke-NativeLogged([string]$FilePath,[string[]]$ArgumentList,[string]$LogPath,[switch]$Append) {
+    $oldPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        if ($Append) {
+            & $FilePath @ArgumentList *>> $LogPath
+        }
+        else {
+            & $FilePath @ArgumentList *> $LogPath
+        }
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldPreference
+    }
+}
+
 function Invoke-GradleTask([object]$Project,[string]$Task,[string]$LogPath) {
     $androidRoot = Get-AndroidRoot $Project
     $wrapper = Join-Path $androidRoot 'gradlew.bat'
@@ -115,14 +132,13 @@ function Invoke-GradleTask([object]$Project,[string]$Task,[string]$LogPath) {
         if (Test-Path -LiteralPath $wrapper) {
             $cmdExe = Join-Path $env:SystemRoot 'System32\cmd.exe'
             $commandLine = 'call "' + $wrapper + '" --no-daemon ' + $Task
-            & $cmdExe /d /s /c $commandLine *> $LogPath
+            $code = Invoke-NativeLogged -FilePath $cmdExe -ArgumentList @('/d','/s','/c',$commandLine) -LogPath $LogPath
         } else {
             $cmd = Get-Command gradle.bat -ErrorAction SilentlyContinue
             if (-not $cmd) { $cmd = Get-Command gradle -ErrorAction SilentlyContinue }
             if (-not $cmd) { throw 'GRADLE_NOT_FOUND' }
-            & $cmd.Source --no-daemon $Task *> $LogPath
+            $code = Invoke-NativeLogged -FilePath $cmd.Source -ArgumentList @('--no-daemon',$Task) -LogPath $LogPath
         }
-        $code = $LASTEXITCODE
     } finally {
         Pop-Location
     }
@@ -414,8 +430,8 @@ function Invoke-Job([object]$Job,[string]$JobLog) {
             $serial=Start-TargetEmulator $project
             $apk=Find-LatestDebugApk $project
             $adb=Get-Adb
-            & $adb -s $serial install -r $apk *> $JobLog
-            if ($LASTEXITCODE -ne 0) { throw "ADB_INSTALL_FAILED_$LASTEXITCODE" }
+            $installCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'install','-r',$apk) -LogPath $JobLog
+            if ($installCode -ne 0) { throw "ADB_INSTALL_FAILED_$installCode" }
             return [ordered]@{ serial=$serial; apk=$apk; log=$JobLog }
         }
         'launch_app' {
@@ -423,8 +439,8 @@ function Invoke-Job([object]$Job,[string]$JobLog) {
             if (-not $project.application_id) { throw 'APPLICATION_ID_NOT_CONFIGURED' }
             $serial=Start-TargetEmulator $project
             $adb=Get-Adb
-            & $adb -s $serial shell monkey -p ([string]$project.application_id) -c android.intent.category.LAUNCHER 1 *> $JobLog
-            if ($LASTEXITCODE -ne 0) { throw "APP_LAUNCH_FAILED_$LASTEXITCODE" }
+            $launchCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','monkey','-p',([string]$project.application_id),'-c','android.intent.category.LAUNCHER','1') -LogPath $JobLog
+            if ($launchCode -ne 0) { throw "APP_LAUNCH_FAILED_$launchCode" }
             return [ordered]@{ serial=$serial; application_id=$project.application_id; log=$JobLog }
         }
         'screenshot' {
@@ -437,10 +453,10 @@ function Invoke-Job([object]$Job,[string]$JobLog) {
             $serial=Start-TargetEmulator $project
             $apk=Find-LatestDebugApk $project
             $adb=Get-Adb
-            & $adb -s $serial install -r $apk *> $JobLog
-            if ($LASTEXITCODE -ne 0) { throw "ADB_INSTALL_FAILED_$LASTEXITCODE" }
-            & $adb -s $serial shell monkey -p ([string]$project.application_id) -c android.intent.category.LAUNCHER 1 >> $JobLog
-            if ($LASTEXITCODE -ne 0) { throw "APP_LAUNCH_FAILED_$LASTEXITCODE" }
+            $installCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'install','-r',$apk) -LogPath $JobLog
+            if ($installCode -ne 0) { throw "ADB_INSTALL_FAILED_$installCode" }
+            $launchCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','monkey','-p',([string]$project.application_id),'-c','android.intent.category.LAUNCHER','1') -LogPath $JobLog -Append
+            if ($launchCode -ne 0) { throw "APP_LAUNCH_FAILED_$launchCode" }
             Start-Sleep -Seconds 3
             $shot=Capture-Screenshot $project ([string]$Job.id)
             return [ordered]@{ apk=$apk; serial=$serial; screenshot=$shot; log=$JobLog }
