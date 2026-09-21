@@ -1,0 +1,60 @@
+name: ONP Cloud Emulator V37
+on:
+  push:
+    branches:
+      - onp-cloud-emulator-v37
+
+jobs:
+  build-and-launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch visual assets
+        shell: bash
+        run: |
+          mkdir -p app/src/main/assets
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-80e4-81f5-a456-d5b623616660/raw?se=2026-09-21T02%3A18%3A11Z&sp=r&sv=2026-02-06&sr=b&scid=9596958a-f68a-5c94-8214-328bc8685ce4&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T19%3A52%3A09Z&ske=2026-09-21T19%3A52%3A09Z&sks=b&skv=2026-02-06&sig=rbUL3pIzMluUd3kZlki%2BMT6/v%2BK2lLi5r6aiy77W71Q%3D' -o app/src/main/assets/main.webp
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-e6c4-81f5-8bb6-47dae121e72f/raw?se=2026-09-21T02%3A18%3A10Z&sp=r&sv=2026-02-06&sr=b&scid=4cb1ef42-5db3-54d5-a337-fdcfe48528c7&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T13%3A37%3A12Z&ske=2026-09-21T13%3A37%3A12Z&sks=b&skv=2026-02-06&sig=jfIL4X2kBdok92eYvzxDSnIkWIGf0%2BQVlvQWT%2BiWtJM%3D' -o app/src/main/assets/channels.webp
+          test -s app/src/main/assets/main.webp
+          test -s app/src/main/assets/channels.webp
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONP-V37-cloud-preview-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Start Ramus cloud Android emulator
+        shell: bash
+        run: |
+          npx --yes ramus-cli@0.1.12 trial
+          npx --yes ramus-cli@0.1.12 session start --apk app/build/outputs/apk/debug/app-debug.apk --wait | tee ramus-session.txt
+          cat ramus-session.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ramus-session
+          path: ramus-session.txt
