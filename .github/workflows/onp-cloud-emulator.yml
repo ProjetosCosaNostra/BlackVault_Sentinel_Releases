@@ -15,27 +15,38 @@ jobs:
         shell: bash
         run: |
           mkdir -p app/src/main/assets
-          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-80e4-81f5-a456-d5b623616660/raw?se=2026-09-21T02%3A18%3A11Z&sp=r&sv=2026-02-06&sr=b&scid=9596958a-f68a-5c94-8214-328bc8685ce4&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T19%3A52%3A09Z&ske=2026-09-21T19%3A52%3A09Z&sks=b&skv=2026-02-06&sig=rbUL3pIzMluUd3kZlki%2BMT6/v%2BK2lLi5r6aiy77W71Q%3D' -o app/src/main/assets/main.webp
-          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-e6c4-81f5-8bb6-47dae121e72f/raw?se=2026-09-21T02%3A18%3A10Z&sp=r&sv=2026-02-06&sr=b&scid=4cb1ef42-5db3-54d5-a337-fdcfe48528c7&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T13%3A37%3A12Z&ske=2026-09-21T13%3A37%3A12Z&sks=b&skv=2026-02-06&sig=jfIL4X2kBdok92eYvzxDSnIkWIGf0%2BQVlvQWT%2BiWtJM%3D' -o app/src/main/assets/channels.webp
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-ff54-81f5-a204-bdf06c0c24f6/raw?se=2026-09-21T02%3A20%3A08Z&sp=r&sv=2026-02-06&sr=b&scid=6cd922b9-79b3-5fae-961c-dc62f2a81652&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T00%3A46%3A17Z&ske=2026-09-22T00%3A46%3A17Z&sks=b&skv=2026-02-06&sig=Z36GwinksedI6ujx4YgzpFfax9rVghsK%2BjGIHF8eHvY%3D' -o app/src/main/assets/main.webp
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-0468-81f5-816d-ad5e4bd0a7c6/raw?se=2026-09-21T02%3A20%3A08Z&sp=r&sv=2026-02-06&sr=b&scid=c514cae5-0f49-5873-861a-87be6fdd2800&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T10%3A25%3A15Z&ske=2026-09-21T10%3A25%3A15Z&sks=b&skv=2026-02-06&sig=ANED%2BFB7WxVxjcwRB10GvM%2BbAJ4B1KJLFYdyr5bNuwM%3D' -o app/src/main/assets/channels.webp
           test -s app/src/main/assets/main.webp
           test -s app/src/main/assets/channels.webp
+          file app/src/main/assets/main.webp
+          file app/src/main/assets/channels.webp
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK diagnostics
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          which sdkmanager || true
+          sdkmanager --version || true
 
       - name: Install Android 35 SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
       - name: Build APK
-        run: gradle :app:assembleDebug --no-daemon
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
@@ -51,6 +62,7 @@ jobs:
         run: |
           npx --yes ramus-cli@0.1.12 trial
           npx --yes ramus-cli@0.1.12 session start --apk app/build/outputs/apk/debug/app-debug.apk --wait | tee ramus-session.txt
+          echo "### Ramus live emulator" >> "$GITHUB_STEP_SUMMARY"
           cat ramus-session.txt >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
