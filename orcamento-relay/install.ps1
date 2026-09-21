@@ -70,7 +70,10 @@ sh.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -F
 "@
 [IO.File]::WriteAllText($Hidden,$vbsBody,[Text.UTF8Encoding]::new($false))
 
-& schtasks.exe /Delete /TN $TaskName /F 2>$null | Out-Null
+& cmd.exe /d /c "schtasks.exe /Query /TN \"$TaskName\" >nul 2>&1"
+if ($LASTEXITCODE -eq 0) {
+    & cmd.exe /d /c "schtasks.exe /Delete /TN \"$TaskName\" /F >nul 2>&1"
+}
 $taskCmd = 'wscript.exe "' + $Hidden + '"'
 & schtasks.exe /Create /TN $TaskName /SC MINUTE /MO 5 /TR $taskCmd /F | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "Nao foi possivel criar a tarefa $TaskName" }
