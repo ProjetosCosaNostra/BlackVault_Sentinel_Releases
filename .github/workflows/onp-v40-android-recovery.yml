@@ -1,4 +1,4 @@
-name: ONP V40 Android Recovery Build
+name: ONP V41 Lossless Android Recovery
 
 on:
   push:
@@ -12,15 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch sharp V40 screens
+      - name: Fetch LOSSLESS PNG authority screens
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/onp-assets onp_v40/app/src/main/res/drawable-nodpi
-          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-8bb4-81f5-8175-746caa7a2ab2/raw?se=2026-09-21T03%3A24%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=edf859c0-4794-556b-916d-96a03d4db531&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T20%3A33%3A48Z&ske=2026-09-21T20%3A33%3A48Z&sks=b&skv=2026-02-06&sig=2wVsLYD%2Bw6gdXBOjnJCcxUCcLNGRU5tys7ypoXs44fU%3D' -o /tmp/onp-assets/screens.zip
-          echo "0bb9b17688b77b6eb9679951607c0a6bd5cbec1cc518c3f4a8ce4c1a8f0b68c2  /tmp/onp-assets/screens.zip" | sha256sum -c -
+          rm -f onp_v40/app/src/main/res/drawable-nodpi/screen_*.jpg onp_v40/app/src/main/res/drawable-nodpi/screen_*.png
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-1f88-81f5-9c59-987e585b6b2b/raw?se=2026-09-21T03%3A27%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=2f97bb01-610b-5f0d-a6c1-2b494560d6de&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T18%3A24%3A33Z&ske=2026-09-21T18%3A24%3A33Z&sks=b&skv=2026-02-06&sig=W1mW30ixjP62EnT2Gdml8xyQaAcxxAWKrVxnYrNAlU8%3D' -o /tmp/onp-assets/screens.zip
+          echo "82b3c18a8659c4f90afd28476326f30d80ac91514d9be79348ff103de8fc7b13  /tmp/onp-assets/screens.zip" | sha256sum -c -
           unzip -o /tmp/onp-assets/screens.zip -d onp_v40/app/src/main/res/drawable-nodpi
-          test "$(find onp_v40/app/src/main/res/drawable-nodpi -name 'screen_*.jpg' | wc -l)" -eq 11
+          test "$(find onp_v40/app/src/main/res/drawable-nodpi -name 'screen_*.png' | wc -l)" -eq 11
+          file onp_v40/app/src/main/res/drawable-nodpi/screen_home.png
+          file onp_v40/app/src/main/res/drawable-nodpi/screen_ecosystem.png
+          sha256sum onp_v40/app/src/main/res/drawable-nodpi/screen_*.png | tee /tmp/onp-assets/png-sha256.txt
 
       - uses: actions/setup-java@v5
         with:
@@ -36,13 +40,12 @@ jobs:
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          sdkmanager --list_installed | grep -E 'platforms;android-35|build-tools;35.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build V40 APK
+      - name: Build LOSSLESS V41 APK
         working-directory: onp_v40
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
@@ -51,8 +54,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ORCAMENTO-NO-PONTO-V40-RECOVERY
+          name: ORCAMENTO-NO-PONTO-V41-LOSSLESS
           path: onp_v40/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONP-V41-PNG-SHA256
+          path: /tmp/onp-assets/png-sha256.txt
 
       - uses: actions/setup-node@v5
         with:
@@ -62,11 +70,11 @@ jobs:
         continue-on-error: true
         run: |
           npx --yes ramus-cli@0.1.12 trial
-          npx --yes ramus-cli@0.1.12 session start --apk onp_v40/app/build/outputs/apk/debug/app-debug.apk --wait | tee ramus-session-v40.txt
-          cat ramus-session-v40.txt >> "$GITHUB_STEP_SUMMARY"
+          npx --yes ramus-cli@0.1.12 session start --apk onp_v40/app/build/outputs/apk/debug/app-debug.apk --wait | tee ramus-session-v41.txt
+          cat ramus-session-v41.txt >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ONP-V40-runtime-receipt
-          path: ramus-session-v40.txt
+          name: ONP-V41-runtime-receipt
+          path: ramus-session-v41.txt
