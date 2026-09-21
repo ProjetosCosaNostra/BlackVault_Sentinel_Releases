@@ -12,7 +12,7 @@ on:
 jobs:
   screenshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -23,6 +23,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
 
       - name: Prepare Android SDK
         shell: bash
@@ -45,19 +52,19 @@ jobs:
       - name: Prepare artifact folder
         run: mkdir -p artifact
 
-      - name: Boot emulator and capture runtime
+      - name: Boot lightweight emulator and capture runtime
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 33
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_2
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r preview-android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am force-stop br.com.lafamigliaplayworks.orcamentonoponto.preview
             adb shell am start -n br.com.lafamigliaplayworks.orcamentonoponto.preview/.MainActivity
-            sleep 4
+            sleep 3
             adb shell wm dismiss-keyguard || true
             adb exec-out screencap -p > artifact/ORCAMENTO_ECOSYSTEM_RUNTIME.png
             adb shell uiautomator dump /sdcard/window.xml || true
