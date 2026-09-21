@@ -7,7 +7,7 @@ on:
 jobs:
   build-and-launch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -15,8 +15,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p app/src/main/assets
-          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-2e18-81f5-a4fc-f77ccf7fed7c/raw?se=2026-09-21T02%3A20%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=3584e89f-b26a-5f69-bef9-57da8107afc1&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T19%3A52%3A17Z&ske=2026-09-21T19%3A52%3A17Z&sks=b&skv=2026-02-06&sig=ZcqD31nxivzR3%2Bsx1wwqhDEKrDpZcU3CDkyWAo2kVvM%3D' -o app/src/main/assets/main.webp
-          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-6250-81f5-9566-7e0747846ba0/raw?se=2026-09-21T02%3A20%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=12f4c3bd-0deb-5b6e-83d4-ba1be57a4e97&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T13%3A37%3A52Z&ske=2026-09-21T13%3A37%3A52Z&sks=b&skv=2026-02-06&sig=rbnFTmHQ%2BC6/yFTVj8MMLlG%2BjobzK17JV8Z5mPnSoWg%3D' -o app/src/main/assets/channels.webp
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-c2a0-81f5-87fa-6d64b201c433/raw?se=2026-09-21T02%3A21%3A47Z&sp=r&sv=2026-02-06&sr=b&scid=c5b43ebc-4faa-5989-a6fb-3c09392de1ce&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T00%3A46%3A54Z&ske=2026-09-22T00%3A46%3A54Z&sks=b&skv=2026-02-06&sig=uwypLnhrlZey9VEcD3pfzn5T%2BnSVQ6aWO0r5MOiH%2BY0%3D' -o app/src/main/assets/main.webp
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-d640-81f5-977a-da406f8a6bac/raw?se=2026-09-21T02%3A21%3A47Z&sp=r&sv=2026-02-06&sr=b&scid=aa600c41-2e84-5afe-bd60-dcf8394dbef0&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T13%3A38%3A02Z&ske=2026-09-21T13%3A38%3A02Z&sks=b&skv=2026-02-06&sig=xgnjNH9PmIzXWBn7AZ1wIPkUug6bhIfHWshTWO3pioc%3D' -o app/src/main/assets/channels.webp
           test -s app/src/main/assets/main.webp
           test -s app/src/main/assets/channels.webp
 
@@ -25,13 +25,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android 35 SDK
+      - name: Install Android command-line tools and API 35
         shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          SDK="$HOME/android-sdk"
+          mkdir -p "$SDK/cmdline-tools"
+          curl -L --fail --retry 3             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip             -o /tmp/cmdline-tools.zip
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/android-cli
+          mv /tmp/android-cli/cmdline-tools "$SDK/cmdline-tools/latest"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
