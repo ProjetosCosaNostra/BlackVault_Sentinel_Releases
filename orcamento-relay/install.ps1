@@ -65,7 +65,7 @@ catch {
 [IO.File]::WriteAllText($Runner,$runnerBody,[Text.UTF8Encoding]::new($false))
 
 $vbsBody = @"
-Set sh = CreateObject(""WScript.Shell"")
+Set sh = CreateObject("WScript.Shell")
 sh.Run ""powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """"$Runner"""""", 0, False
 "@
 [IO.File]::WriteAllText($Hidden,$vbsBody,[Text.UTF8Encoding]::new($false))
