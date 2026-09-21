@@ -57,7 +57,7 @@ $runNow = "& '$ps' -NoProfile -ExecutionPolicy Bypass -File '$RunnerPath'" + [En
 [IO.File]::WriteAllText((Join-Path $Base 'RUN_NOW.ps1'),$runNow,[Text.UTF8Encoding]::new($false))
 
 $statusLines = @(
-    "$ErrorActionPreference = 'SilentlyContinue'",
+    '$ErrorActionPreference = ''SilentlyContinue''',
     "Write-Host 'BlackGold Project Runner V1' -ForegroundColor Cyan",
     "Get-ScheduledTask -TaskName '$TaskName' | Format-List TaskName,State",
     "Write-Host ''",
