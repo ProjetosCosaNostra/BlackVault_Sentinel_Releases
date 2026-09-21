@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.4'
+$RunnerVersion = '1.0.5'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -503,56 +503,6 @@ try {
             $jobLog = Join-Path $LogsDir ($jobId + '.log')
             $started = Get-Date
             try {
-                if ($job.args -and $job.args.requires_success) {
-                    $depId = [string]$job.args.requires_success
-                    if ($depId -notmatch '^[A-Za-z0-9._-]+
-                    schema = 'blackgold.project-runner.result.v1'
-                    id = $jobId
-                    action = [string]$job.action
-                    project = [string]$job.project
-                    status = 'success'
-                    started_at = $started.ToString('o')
-                    finished_at = (Get-Date -Format o)
-                    data = $data
-                    error = $null
-                }
-            }
-            catch {
-                $result = [ordered]@{
-                    schema = 'blackgold.project-runner.result.v1'
-                    id = $jobId
-                    action = [string]$job.action
-                    project = [string]$job.project
-                    status = 'error'
-                    started_at = $started.ToString('o')
-                    finished_at = (Get-Date -Format o)
-                    data = $null
-                    error = $_.Exception.Message
-                }
-            }
-            Write-JsonFile $result $resultPath
-        }
-    }
-
-    Write-Heartbeat
-    Publish-ControlChanges
-}
-finally {
-    if ($LockStream) { $LockStream.Dispose() }
-}
-) {
-                        throw "INVALID_DEPENDENCY_ID: $depId"
-                    }
-                    $depPath = Join-Path $outbox ($depId + '.json')
-                    if (-not (Test-Path -LiteralPath $depPath)) {
-                        throw "DEPENDENCY_RESULT_NOT_FOUND: $depId"
-                    }
-                    $dep = Read-JsonFile $depPath
-                    if ([string]$dep.status -ne 'success') {
-                        throw "DEPENDENCY_NOT_SUCCESS: $depId"
-                    }
-                }
-
                 $data = Invoke-Job $job $jobLog
                 $result = [ordered]@{
                     schema = 'blackgold.project-runner.result.v1'
