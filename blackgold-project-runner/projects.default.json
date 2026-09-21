@@ -1,0 +1,24 @@
+{
+  "schema": "blackgold.project-runner.projects.v1",
+  "allowed_roots": [
+    "E:\\"
+  ],
+  "projects": [
+    {
+      "id": "orcamento_no_ponto",
+      "root": "E:\\Orcamento_no_Ponto",
+      "android_project": "01_Android_App\\orcamento_no_ponto",
+      "application_id": "br.com.lafamigliaplayworks.orcamentonoponto",
+      "avd": "Orcamento_no_Ponto_API35",
+      "patch_roots": [
+        "01_Android_App\\orcamento_no_ponto\\app\\src\\main"
+      ],
+      "protected_file_patterns": [
+        "authority_*",
+        "*_approved_*",
+        "ui_*",
+        "exact_*"
+      ]
+    }
+  ]
+}
