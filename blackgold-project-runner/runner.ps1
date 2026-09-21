@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.0'
+$RunnerVersion = '1.0.1'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -113,7 +113,9 @@ function Invoke-GradleTask([object]$Project,[string]$Task,[string]$LogPath) {
     Push-Location $androidRoot
     try {
         if (Test-Path -LiteralPath $wrapper) {
-            & $wrapper --no-daemon $Task *> $LogPath
+            $cmdExe = Join-Path $env:SystemRoot 'System32\cmd.exe'
+            $commandLine = 'call "' + $wrapper + '" --no-daemon ' + $Task
+            & $cmdExe /d /s /c $commandLine *> $LogPath
         } else {
             $cmd = Get-Command gradle.bat -ErrorAction SilentlyContinue
             if (-not $cmd) { $cmd = Get-Command gradle -ErrorAction SilentlyContinue }
