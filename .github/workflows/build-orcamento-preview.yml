@@ -33,13 +33,13 @@ jobs:
           fi
           echo "SDKMANAGER=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;36.0.0"
           "$SDKMANAGER" --list_installed
 
-      - name: Gradle 8.9
+      - name: Gradle 9.1.0
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '9.1.0'
 
       - name: Build debug APK
         run: gradle -p preview-android :app:assembleDebug --stacktrace
