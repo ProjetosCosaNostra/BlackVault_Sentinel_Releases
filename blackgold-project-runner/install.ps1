@@ -11,7 +11,7 @@ $TaskName = 'BlackGold_Project_Runner_V1'
 $ControlBranch = 'blackgold-project-runner-v1'
 $ControlUrl = 'https://github.com/ProjetosCosaNostra/BlackVault_Sentinel.git'
 
-$RunnerUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/74a465a42e5d6ad9f8a37dad9dbb64e16c225bdd/blackgold-project-runner/runner.ps1'
+$RunnerUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/298db7af01f4609dc69d0a9063256ae178695ed7/blackgold-project-runner/runner.ps1'
 $ConfigUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/4bb1ef6a88e765c1d9fd309974c776ebc219447e/blackgold-project-runner/projects.default.json'
 
 New-Item -ItemType Directory -Force -Path $Base,$LogsDir | Out-Null
@@ -37,7 +37,7 @@ Write-Host '[2/5] Instalando Runner V1...' -ForegroundColor Cyan
 Invoke-WebRequest -UseBasicParsing -Uri $RunnerUrl -OutFile $RunnerPath
 if (-not (Test-Path -LiteralPath $RunnerPath)) { throw 'runner.ps1 nao foi baixado.' }
 $runnerText = Get-Content -LiteralPath $RunnerPath -Raw
-if ($runnerText -notmatch "RunnerVersion\s*=\s*'1\.0\.0'") {
+if ($runnerText -notmatch "RunnerVersion\s*=\s*'1\.0\.1'") {
     throw 'Runner baixado nao corresponde a V1 esperada.'
 }
 if ($runnerText -match 'Invoke-Expression|iex\s') {
@@ -85,7 +85,7 @@ Start-Process -FilePath $ps -WindowStyle Hidden -ArgumentList $runArgs | Out-Nul
 
 Write-Host ''
 Write-Host 'BLACKGOLD PROJECT RUNNER V1 INSTALADO' -ForegroundColor Green
-Write-Host "Versao: $Version" -ForegroundColor Green
+Write-Host "Versao: 1.0.1" -ForegroundColor Green
 Write-Host "Base local: $Base" -ForegroundColor Cyan
 Write-Host "Tarefa: $TaskName (1 minuto, oculta)" -ForegroundColor Cyan
 Write-Host 'Projeto inicial: Orcamento no Ponto' -ForegroundColor Cyan
