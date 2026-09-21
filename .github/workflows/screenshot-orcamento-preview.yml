@@ -1,0 +1,71 @@
+name: Screenshot Orcamento Ecosystem Preview
+
+on:
+  push:
+    branches:
+      - orcamento-preview-build-20260921
+    paths:
+      - 'preview-android/**'
+      - '.github/workflows/screenshot-orcamento-preview.yml'
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build preview APK
+        run: gradle -p preview-android :app:assembleDebug --stacktrace
+
+      - name: Prepare artifact folder
+        run: mkdir -p artifact
+
+      - name: Boot emulator and capture runtime
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r preview-android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am force-stop br.com.lafamigliaplayworks.orcamentonoponto.preview
+            adb shell am start -n br.com.lafamigliaplayworks.orcamentonoponto.preview/.MainActivity
+            sleep 4
+            adb shell wm dismiss-keyguard || true
+            adb exec-out screencap -p > artifact/ORCAMENTO_ECOSYSTEM_RUNTIME.png
+            adb shell uiautomator dump /sdcard/window.xml || true
+            adb pull /sdcard/window.xml artifact/window.xml || true
+
+      - name: Upload runtime evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORCAMENTO_ECOSYSTEM_RUNTIME_EVIDENCE
+          path: artifact/
+          if-no-files-found: error
