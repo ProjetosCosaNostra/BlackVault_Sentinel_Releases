@@ -11,7 +11,7 @@ $TaskName = 'BlackGold_Project_Runner_V1'
 $RunnerUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/c87346c90c269356c8ad5af850a25c21d6fc102f/blackgold-project-runner/runner.ps1'
 
 $LocalRoot = 'E:\Junior_Resolve__RECOVERY_A17_20260917'
-$RecoveryRef = 'backup/jr-recovered-r63e-android-recovery-hardened-20260921'
+$RecoveryRef = 'backup/jr-recovered-r63f-android-parser-fixed-20260921'
 $SnapshotRoot = 'E:\Junior_Resolve__RECOVERY_SNAPSHOTS'
 
 function Invoke-NativeChecked {
