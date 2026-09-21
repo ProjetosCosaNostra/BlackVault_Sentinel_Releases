@@ -1,0 +1,65 @@
+name: ONP V40 Android Recovery Build
+
+on:
+  push:
+    branches: [ "onp-recovery-v40-build" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch sharp V40 screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/onp-assets onp_v40/app/src/main/res/drawable-nodpi
+          curl -L --fail --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-9350-81f5-9c3a-f4813f892e23/raw?se=2026-09-21T03%3A23%3A26Z&sp=r&sv=2026-02-06&sr=b&scid=831cfcbf-df89-5e0e-aa0f-2a3625919a4d&skoid=78501c7f-f65d-4e8d-9110-bed29e1beb41&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-20T11%3A02%3A55Z&ske=2026-09-21T11%3A02%3A55Z&sks=b&skv=2026-02-06&sig=lSdsE7ZtxN43uM2SHr88GZLVjvZyetP9YOQ3X1lslXI%3D' -o /tmp/onp-assets/screens.zip
+          echo "0bb9b17688b77b6eb9679951607c0a6bd5cbec1cc518c3f4a8ce4c1a8f0b68c2  /tmp/onp-assets/screens.zip" | sha256sum -c -
+          unzip -o /tmp/onp-assets/screens.zip -d onp_v40/app/src/main/res/drawable-nodpi
+          test "$(find onp_v40/app/src/main/res/drawable-nodpi -name 'screen_*.jpg' | wc -l)" -eq 11
+          identify onp_v40/app/src/main/res/drawable-nodpi/screen_home.jpg | head -1 || true
+          identify onp_v40/app/src/main/res/drawable-nodpi/screen_ecosystem.jpg | head -1 || true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build V40 APK
+        working-directory: onp_v40
+        run: gradle :app:assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ORCAMENTO-NO-PONTO-V40-RECOVERY
+          path: onp_v40/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Start cloud Android session
+        continue-on-error: true
+        run: |
+          npx --yes ramus-cli@0.1.12 trial
+          npx --yes ramus-cli@0.1.12 session start --apk onp_v40/app/build/outputs/apk/debug/app-debug.apk --wait | tee ramus-session-v40.txt
+          cat ramus-session-v40.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ONP-V40-runtime-receipt
+          path: ramus-session-v40.txt
