@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.1'
+$RunnerVersion = '1.0.2'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -131,11 +131,26 @@ function Invoke-GradleTask([object]$Project,[string]$Task,[string]$LogPath) {
 
 function Find-LatestDebugApk([object]$Project) {
     $androidRoot = Get-AndroidRoot $Project
-    $dir = Join-Path $androidRoot 'app\build\outputs\apk\debug'
-    $apk = Get-ChildItem -LiteralPath $dir -Filter '*.apk' -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $apk) { throw "DEBUG_APK_NOT_FOUND: $dir" }
-    return $apk.FullName
+    $outputs = Join-Path $androidRoot 'app\build\outputs'
+    if (-not (Test-Path -LiteralPath $outputs)) {
+        throw "BUILD_OUTPUTS_NOT_FOUND: $outputs"
+    }
+
+    $candidates = @(Get-ChildItem -LiteralPath $outputs -Filter '*.apk' -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
+        $_.FullName -notmatch '(?i)[\\/]androidTest[\\/]' -and
+        $_.Name -notmatch '(?i)androidTest'
+    })
+
+    if (-not $candidates.Count) {
+        throw "APK_NOT_FOUND_RECURSIVE: $outputs"
+    }
+
+    $ranked = foreach ($item in $candidates) {
+        $priority = if ($item.FullName -match '(?i)[\\/]debug[\\/]' -or $item.Name -match '(?i)debug') { 0 } else { 1 }
+        [pscustomobject]@{ File=$item; Priority=$priority; Time=$item.LastWriteTimeUtc }
+    }
+    $apk = $ranked | Sort-Object Priority,@{Expression='Time';Descending=$true} | Select-Object -First 1
+    return $apk.File.FullName
 }
 
 function Get-Adb {
