@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace = "br.com.lafamigliaplayworks.orcamentonoponto.preview"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.lafamigliaplayworks.orcamentonoponto.preview"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "preview-1"
     }
@@ -18,4 +18,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+
+dependencies {
+    implementation("androidx.core:core:1.17.0")
 }
