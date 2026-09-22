@@ -252,13 +252,17 @@ function Capture-Screenshot([object]$Project,[string]$JobId) {
     $adb = Get-Adb
     $localDir = Join-Path $Base 'captures'
     New-Item -ItemType Directory -Force -Path $localDir | Out-Null
+    $captureLog = Join-Path $LogsDir ($JobId + '.capture.log')
     $png = Join-Path $localDir ($JobId + '.png')
     $remote = '/sdcard/blackgold_runner.png'
-    & $adb -s $serial shell screencap -p $remote | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'SCREENSHOT_CAPTURE_FAILED' }
-    & $adb -s $serial pull $remote $png | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'SCREENSHOT_PULL_FAILED' }
-    & $adb -s $serial shell rm $remote | Out-Null
+
+    $shotCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','screencap','-p',$remote) -LogPath $captureLog
+    if ($shotCode -ne 0) { throw "SCREENSHOT_CAPTURE_FAILED_$shotCode" }
+
+    $pullCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'pull',$remote,$png) -LogPath $captureLog -Append
+    if ($pullCode -ne 0) { throw "SCREENSHOT_PULL_FAILED_$pullCode" }
+
+    [void](Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','rm',$remote) -LogPath $captureLog -Append)
 
     $size = (Get-Item -LiteralPath $png).Length
     if ($size -gt 2097152) { throw "SCREENSHOT_TOO_LARGE: $size" }
@@ -274,10 +278,12 @@ function Capture-Screenshot([object]$Project,[string]$JobId) {
 
     $xmlRemote = '/sdcard/blackgold_runner.xml'
     $xmlLocal = Join-Path $outbox ($JobId + '.uiautomator.xml')
-    & $adb -s $serial shell uiautomator dump $xmlRemote 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        & $adb -s $serial pull $xmlRemote $xmlLocal 2>$null | Out-Null
-        & $adb -s $serial shell rm $xmlRemote 2>$null | Out-Null
+    $dumpCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','uiautomator','dump',$xmlRemote) -LogPath $captureLog -Append
+    if ($dumpCode -eq 0) {
+        $xmlPullCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'pull',$xmlRemote,$xmlLocal) -LogPath $captureLog -Append
+        if ($xmlPullCode -eq 0) {
+            [void](Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','rm',$xmlRemote) -LogPath $captureLog -Append)
+        }
     }
 
     return [ordered]@{
@@ -287,6 +293,7 @@ function Capture-Screenshot([object]$Project,[string]$JobId) {
         uiautomator_xml = $(if (Test-Path -LiteralPath $xmlLocal) { $OutboxRel + '\' + $JobId + '.uiautomator.xml' } else { $null })
         sha256 = (Get-FileHash -LiteralPath $png -Algorithm SHA256).Hash.ToLowerInvariant()
         bytes = $size
+        capture_log = $captureLog
     }
 }
 
