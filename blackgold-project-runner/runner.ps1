@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.0.8'
+$RunnerVersion = '1.0.9'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ControlRepo = Join-Path $Base 'control'
 $ConfigPath = Join-Path $Base 'projects.json'
@@ -469,6 +469,45 @@ function Invoke-Job([object]$Job,[string]$JobLog) {
             $project=Get-Project ([string]$Job.project)
             if ($project.id -eq 'junior_resolve') { throw 'JUNIOR_RESOLVE_GENERIC_PATCH_BLOCKED_USE_RECOVERY' }
             return (Apply-Patch $project $Job $JobLog)
+        }
+        'junior_recovery_diagnostic' {
+            $project=Get-Project ([string]$Job.project)
+            if ($project.id -ne 'junior_resolve') { throw 'JUNIOR_RECOVERY_DIAGNOSTIC_PROJECT_MISMATCH' }
+
+            $snapshotRoot = 'E:\Junior_Resolve__RECOVERY_SNAPSHOTS'
+            if (-not (Test-Path -LiteralPath $snapshotRoot)) { throw "JR_RECOVERY_SNAPSHOT_ROOT_NOT_FOUND: $snapshotRoot" }
+
+            $failure = Get-ChildItem -LiteralPath $snapshotRoot -Filter 'recovery-android-node-failure.json' -File -Recurse -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 1
+            if (-not $failure) { throw 'JR_RECOVERY_FAILURE_RECEIPT_NOT_FOUND' }
+
+            $failureRaw = Get-Content -LiteralPath $failure.FullName -Raw
+            $failureObj = $failureRaw | ConvertFrom-Json
+            $logPath = [string]$failureObj.log
+            if (-not $logPath) { throw 'JR_RECOVERY_FAILURE_LOG_PATH_MISSING' }
+            if (-not (Test-UnderRoot $logPath $snapshotRoot)) { throw "JR_RECOVERY_LOG_OUTSIDE_SNAPSHOT_ROOT: $logPath" }
+
+            $tail = @()
+            if (Test-Path -LiteralPath $logPath) {
+                $tail = @(Get-Content -LiteralPath $logPath -Tail 220)
+            }
+
+            $failOnly = @($tail | Where-Object {
+                $_ -match '^FAIL\s' -or
+                $_ -match '^===== JR RECOVERY FAILURES' -or
+                $_ -match '^===== END JR RECOVERY FAILURES' -or
+                $_ -match '^Error:' -or
+                $_ -match '^> '
+            })
+
+            return [ordered]@{
+                failure_receipt = $failure.FullName
+                failure_error = [string]$failureObj.error
+                log = $logPath
+                failure_lines = @($failOnly)
+                log_tail = @($tail)
+            }
         }
         default { throw "ACTION_NOT_ALLOWED: $action" }
     }
