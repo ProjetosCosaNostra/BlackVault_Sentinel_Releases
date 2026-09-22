@@ -98,6 +98,16 @@ function Ensure-RunnerTask {
 
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName $TaskName
+
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        Start-Sleep -Seconds 2
+        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        if ($task -and [string]$task.State -eq 'Running') { return $task }
+    } while ((Get-Date) -lt $deadline)
+
+    $state = if ($task) { [string]$task.State } else { 'Missing' }
+    throw "RUNNER_TASK_NOT_RUNNING: $TaskName state=$state"
 }
 
 New-Item -ItemType Directory -Force -Path $RunnerRoot | Out-Null
@@ -141,7 +151,7 @@ try {
         }
     }
 
-    Ensure-RunnerTask -Root $RunnerRoot
+    $runnerTask = Ensure-RunnerTask -Root $RunnerRoot
 
     $receipt = [ordered]@{
         Schema = 1
@@ -153,6 +163,7 @@ try {
         RepositoryUrl = $RepositoryUrl
         Labels = @('self-hosted','Windows','X64','junior-resolve')
         ScheduledTask = $TaskName
+        ScheduledTaskState = [string]$runnerTask.State
         InstalledAsService = $false
         InstalledAsUserTask = $true
         BridgeInstalled = $false
