@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.2.0'
+$RunnerVersion = '1.2.1'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ConfigPath = Join-Path $Base 'projects.json'
 $ProjectFilter = [string]$env:BLACKGOLD_PROJECT_FILTER
@@ -330,24 +330,27 @@ function Invoke-VisualGate([object]$Project,[object]$Job,[string]$JobLog) {
             throw ("VISUAL_GATE_RUNTIME_TOO_SMALL: runtime=" + $runtime.Width + "x" + $runtime.Height)
         }
 
-        $gold32 = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-        $run32 = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-        $diff = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $gold32 = [System.Drawing.Bitmap]::new($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $run32 = [System.Drawing.Bitmap]::new($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $diff = [System.Drawing.Bitmap]::new($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 
         try {
             $gg=[System.Drawing.Graphics]::FromImage($gold32)
             $rg=[System.Drawing.Graphics]::FromImage($run32)
             try {
                 $gg.DrawImage($gold,0,0,$width,$height)
-                $srcRect = New-Object System.Drawing.Rectangle($cropX,$cropY,$width,$height)
-                $dstRect = New-Object System.Drawing.Rectangle(0,0,$width,$height)
+                $srcRect = [System.Drawing.Rectangle]::new($cropX,$cropY,$width,$height)
+                $dstRect = [System.Drawing.Rectangle]::new(0,0,$width,$height)
                 $rg.DrawImage($runtime,$dstRect,$srcRect,[System.Drawing.GraphicsUnit]::Pixel)
             } finally {
                 $gg.Dispose()
                 $rg.Dispose()
             }
 
-            $rect = New-Object System.Drawing.Rectangle(0,0,$width,$height)
+            $rect = [System.Drawing.Rectangle]::new(0,0,$width,$height)
+            $gData=$null
+            $rData=$null
+            $dData=$null
             $gData=$gold32.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::ReadOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
             $rData=$run32.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::ReadOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
             $dData=$diff.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::WriteOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
