@@ -1,0 +1,65 @@
+name: Validate BlackGold Runner V1.1.0
+
+on:
+  push:
+    branches:
+      - blackgold-project-runner-v1
+    paths:
+      - 'blackgold-project-runner/runner.ps1'
+      - 'blackgold-project-runner/update_v1_1_0_parallel_projects.ps1'
+      - '.github/workflows/runner-v110-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse-and-contract:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell files
+        shell: powershell
+        run: |
+          $files = @(
+            '.\blackgold-project-runner\runner.ps1',
+            '.\blackgold-project-runner\update_v1_1_0_parallel_projects.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PARSER_FAILED: $file"
+            }
+            Write-Host "PASS parser: $file"
+          }
+
+      - name: Verify parallel worker contract
+        shell: powershell
+        run: |
+          $runner = Get-Content '.\blackgold-project-runner\runner.ps1' -Raw
+          $updater = Get-Content '.\blackgold-project-runner\update_v1_1_0_parallel_projects.ps1' -Raw
+          $requiredRunner = @(
+            "RunnerVersion = '1.1.0'",
+            'BLACKGOLD_PROJECT_FILTER',
+            'CONTROL_PUSH_FAILED_AFTER_RETRY',
+            'candidateProject -ne $ProjectFilter',
+            'project_filter=$ProjectFilter'
+          )
+          foreach ($needle in $requiredRunner) {
+            if (-not $runner.Contains($needle)) { throw "RUNNER_CONTRACT_MISSING: $needle" }
+          }
+          $requiredUpdater = @(
+            'BlackGold_Project_Runner_',
+            'RUN_ALL_PROJECTS_NOW.ps1',
+            'Start-ScheduledTask -TaskName $taskName',
+            'Disable-ScheduledTask -TaskName $LegacyTask'
+          )
+          foreach ($needle in $requiredUpdater) {
+            if (-not $updater.Contains($needle)) { throw "UPDATER_CONTRACT_MISSING: $needle" }
+          }
+          Write-Host 'PASS parallel worker contract'
