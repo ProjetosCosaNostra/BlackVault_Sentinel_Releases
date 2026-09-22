@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.2.1'
+$RunnerVersion = '1.2.2'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ConfigPath = Join-Path $Base 'projects.json'
 $ProjectFilter = [string]$env:BLACKGOLD_PROJECT_FILTER
@@ -299,6 +299,17 @@ function Invoke-VisualGate([object]$Project,[object]$Job,[string]$JobLog) {
 
     $serial = Start-TargetEmulator $Project
     $adb = Get-Adb
+
+    if ($Job.args.ensure_launch) {
+        if (-not $Project.application_id) { throw 'VISUAL_GATE_APPLICATION_ID_NOT_CONFIGURED' }
+        $activity = if ($Job.args.activity) { [string]$Job.args.activity } else { '.MainActivity' }
+        [void](Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','am','force-stop',([string]$Project.application_id)) -LogPath $JobLog)
+        $component = ([string]$Project.application_id) + '/' + $activity
+        $launchCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','am','start','-W','-n',$component) -LogPath $JobLog -Append
+        if ($launchCode -ne 0) { throw "VISUAL_GATE_APP_LAUNCH_FAILED_$launchCode" }
+        Start-Sleep -Seconds 2
+    }
+
     $captureDir = Join-Path $Base 'captures'
     [IO.Directory]::CreateDirectory($captureDir) | Out-Null
 
