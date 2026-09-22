@@ -1,0 +1,33 @@
+name: Validate Orcamento Relay PowerShell
+
+on:
+  pull_request:
+    branches:
+      - orcamento-relay-v3
+    paths:
+      - 'orcamento-relay/PROJECT_RELAY_CLIENT_V4.ps1'
+      - '.relay-syntax-trigger'
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell client
+        shell: pwsh
+        run: |
+          $path = Join-Path $PWD 'orcamento-relay\PROJECT_RELAY_CLIENT_V4.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $path,
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'POWERSHELL_SYNTAX=PASS'
