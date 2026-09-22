@@ -8,7 +8,7 @@ $ConfigPath = Join-Path $Base 'projects.json'
 $WorkersDir = Join-Path $Base 'workers'
 $LegacyTask = 'BlackGold_Project_Runner_V1'
 $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$RunnerUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/45edd442df6855373f95e5043f2136be18acbff0/blackgold-project-runner/runner.ps1'
+$RunnerUrl = 'https://raw.githubusercontent.com/ProjetosCosaNostra/BlackVault_Sentinel_Releases/8ecd6d39cf602435dddd5836a46cf3b8a0b957a2/blackgold-project-runner/runner.ps1'
 
 New-Item -ItemType Directory -Force -Path $Base,$WorkersDir | Out-Null
 if (-not (Test-Path -LiteralPath $ConfigPath)) { throw "Config nao encontrada: $ConfigPath" }
