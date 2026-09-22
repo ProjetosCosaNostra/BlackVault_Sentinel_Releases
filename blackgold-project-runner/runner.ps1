@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$RunnerVersion = '1.1.2'
+$RunnerVersion = '1.2.0'
 $Base = Join-Path $env:LOCALAPPDATA 'BlackGoldProjectRunner'
 $ConfigPath = Join-Path $Base 'projects.json'
 $ProjectFilter = [string]$env:BLACKGOLD_PROJECT_FILTER
@@ -286,6 +286,159 @@ function Capture-Screenshot([object]$Project,[string]$JobId) {
         capture_log = $captureLog
     }
 }
+
+function Invoke-VisualGate([object]$Project,[object]$Job,[string]$JobLog) {
+    Add-Type -AssemblyName System.Drawing
+
+    $goldenRel = [string]$Job.args.golden_path
+    if (-not $goldenRel) { throw 'VISUAL_GATE_GOLDEN_PATH_MISSING' }
+
+    $goldenPath = Join-Path $Project.root $goldenRel
+    if (-not (Test-UnderRoot $goldenPath $Project.root)) { throw 'VISUAL_GATE_GOLDEN_OUTSIDE_PROJECT' }
+    if (-not (Test-Path -LiteralPath $goldenPath)) { throw "VISUAL_GATE_GOLDEN_NOT_FOUND: $goldenPath" }
+
+    $serial = Start-TargetEmulator $Project
+    $adb = Get-Adb
+    $captureDir = Join-Path $Base 'captures'
+    [IO.Directory]::CreateDirectory($captureDir) | Out-Null
+
+    $runtimePath = Join-Path $captureDir (([string]$Job.id) + '.visual-runtime.png')
+    $remote = '/sdcard/blackgold_visual_gate.png'
+    $captureLog = Join-Path $LogsDir (([string]$Job.id) + '.visual-gate.log')
+
+    $shotCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','screencap','-p',$remote) -LogPath $captureLog
+    if ($shotCode -ne 0) { throw 'VISUAL_GATE_CAPTURE_FAILED' }
+
+    $pullCode = Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'pull',$remote,$runtimePath) -LogPath $captureLog -Append
+    if ($pullCode -ne 0) { throw 'VISUAL_GATE_PULL_FAILED' }
+    [void](Invoke-NativeLogged -FilePath $adb -ArgumentList @('-s',$serial,'shell','rm',$remote) -LogPath $captureLog -Append)
+
+    $gold = [System.Drawing.Bitmap]::FromFile($goldenPath)
+    $runtime = [System.Drawing.Bitmap]::FromFile($runtimePath)
+    try {
+        $cropX = if ($null -ne $Job.args.crop_x) { [int]$Job.args.crop_x } else { 0 }
+        $cropY = if ($null -ne $Job.args.crop_y) { [int]$Job.args.crop_y } else { 0 }
+        $width = if ($null -ne $Job.args.width) { [int]$Job.args.width } else { $gold.Width }
+        $height = if ($null -ne $Job.args.height) { [int]$Job.args.height } else { $gold.Height }
+        $channelTolerance = if ($null -ne $Job.args.channel_tolerance) { [int]$Job.args.channel_tolerance } else { 2 }
+        $maxMismatchRatio = if ($null -ne $Job.args.max_mismatch_ratio) { [double]$Job.args.max_mismatch_ratio } else { 0.002 }
+
+        if ($gold.Width -ne $width -or $gold.Height -ne $height) {
+            throw ("VISUAL_GATE_GOLDEN_DIMENSION_MISMATCH: golden=" + $gold.Width + "x" + $gold.Height + " expected=" + $width + "x" + $height)
+        }
+        if (($cropX + $width) -gt $runtime.Width -or ($cropY + $height) -gt $runtime.Height) {
+            throw ("VISUAL_GATE_RUNTIME_TOO_SMALL: runtime=" + $runtime.Width + "x" + $runtime.Height)
+        }
+
+        $gold32 = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $run32 = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $diff = New-Object System.Drawing.Bitmap($width,$height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+
+        try {
+            $gg=[System.Drawing.Graphics]::FromImage($gold32)
+            $rg=[System.Drawing.Graphics]::FromImage($run32)
+            try {
+                $gg.DrawImage($gold,0,0,$width,$height)
+                $srcRect = New-Object System.Drawing.Rectangle($cropX,$cropY,$width,$height)
+                $dstRect = New-Object System.Drawing.Rectangle(0,0,$width,$height)
+                $rg.DrawImage($runtime,$dstRect,$srcRect,[System.Drawing.GraphicsUnit]::Pixel)
+            } finally {
+                $gg.Dispose()
+                $rg.Dispose()
+            }
+
+            $rect = New-Object System.Drawing.Rectangle(0,0,$width,$height)
+            $gData=$gold32.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::ReadOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+            $rData=$run32.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::ReadOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+            $dData=$diff.LockBits($rect,[System.Drawing.Imaging.ImageLockMode]::WriteOnly,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+
+            try {
+                $bytes=[Math]::Abs($gData.Stride) * $height
+                $ga=New-Object byte[] $bytes
+                $ra=New-Object byte[] $bytes
+                $da=New-Object byte[] $bytes
+                [Runtime.InteropServices.Marshal]::Copy($gData.Scan0,$ga,0,$bytes)
+                [Runtime.InteropServices.Marshal]::Copy($rData.Scan0,$ra,0,$bytes)
+
+                [long]$mismatch=0
+                [long]$sumDelta=0
+                [int]$maxDelta=0
+
+                for($yy=0;$yy -lt $height;$yy++){
+                    $row=$yy * [Math]::Abs($gData.Stride)
+                    for($xx=0;$xx -lt $width;$xx++){
+                        $i=$row + ($xx*4)
+                        $db=[Math]::Abs([int]$ga[$i]-[int]$ra[$i])
+                        $dg=[Math]::Abs([int]$ga[$i+1]-[int]$ra[$i+1])
+                        $dr=[Math]::Abs([int]$ga[$i+2]-[int]$ra[$i+2])
+                        $pixelMax=[Math]::Max($dr,[Math]::Max($dg,$db))
+                        $sumDelta += ($dr+$dg+$db)
+                        if($pixelMax -gt $maxDelta){$maxDelta=$pixelMax}
+                        if($pixelMax -gt $channelTolerance){
+                            $mismatch++
+                            $da[$i]=0
+                            $da[$i+1]=0
+                            $da[$i+2]=255
+                            $da[$i+3]=255
+                        } else {
+                            $da[$i]=0
+                            $da[$i+1]=0
+                            $da[$i+2]=0
+                            $da[$i+3]=0
+                        }
+                    }
+                }
+
+                [Runtime.InteropServices.Marshal]::Copy($da,0,$dData.Scan0,$bytes)
+
+                $pixels=[double]($width*$height)
+                $ratio=[double]$mismatch/$pixels
+                $mean=[double]$sumDelta/($pixels*3.0)
+                $pass=($ratio -le $maxMismatchRatio)
+
+                $outbox=Join-Path $ControlRepo $OutboxRel
+                [IO.Directory]::CreateDirectory($outbox) | Out-Null
+                $runtimeOut=Join-Path $outbox (([string]$Job.id)+'.runtime.png')
+                $diffOut=Join-Path $outbox (([string]$Job.id)+'.diff.png')
+                [IO.File]::Copy($runtimePath,$runtimeOut,$true)
+                $diff.Save($diffOut,[System.Drawing.Imaging.ImageFormat]::Png)
+
+                return [ordered]@{
+                    pass=$pass
+                    serial=$serial
+                    golden=$goldenRel
+                    golden_sha256=(Get-FileHash -LiteralPath $goldenPath -Algorithm SHA256).Hash.ToLowerInvariant()
+                    runtime_sha256=(Get-FileHash -LiteralPath $runtimePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                    width=$width
+                    height=$height
+                    crop_x=$cropX
+                    crop_y=$cropY
+                    channel_tolerance=$channelTolerance
+                    mismatch_pixels=$mismatch
+                    mismatch_ratio=$ratio
+                    mean_abs_channel_delta=$mean
+                    max_channel_delta=$maxDelta
+                    max_mismatch_ratio=$maxMismatchRatio
+                    runtime_png=($OutboxRel + '\' + ([string]$Job.id) + '.runtime.png')
+                    diff_png=($OutboxRel + '\' + ([string]$Job.id) + '.diff.png')
+                    log=$captureLog
+                }
+            } finally {
+                if($gData){$gold32.UnlockBits($gData)}
+                if($rData){$run32.UnlockBits($rData)}
+                if($dData){$diff.UnlockBits($dData)}
+            }
+        } finally {
+            if($gold32){$gold32.Dispose()}
+            if($run32){$run32.Dispose()}
+            if($diff){$diff.Dispose()}
+        }
+    } finally {
+        $gold.Dispose()
+        $runtime.Dispose()
+    }
+}
+
 function Apply-Patch([object]$Project,[object]$Job,[string]$JobLog) {
     $payloadRel = if ($Job.args.payload_dir) { [string]$Job.args.payload_dir } else { "project_runner\payloads\$($Job.id)" }
     $payloadRoot = Normalize-Path (Join-Path $ControlRepo $payloadRel)
@@ -476,6 +629,10 @@ function Invoke-Job([object]$Job,[string]$JobLog) {
             Start-Sleep -Seconds 3
             $shot=Capture-Screenshot $project ([string]$Job.id)
             return [ordered]@{ apk=$apk; serial=$serial; screenshot=$shot; log=$JobLog }
+        }
+        'visual_gate' {
+            $project=Get-Project ([string]$Job.project)
+            return (Invoke-VisualGate $project $Job $JobLog)
         }
         'apply_patch' {
             $project=Get-Project ([string]$Job.project)
