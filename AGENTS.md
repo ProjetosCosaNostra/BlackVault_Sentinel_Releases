@@ -2,12 +2,14 @@
 
 This repository participates in the BlackGold ecosystem.
 
-Before changing build, automation, terminal, emulator, runner, or local execution behavior, consult the canonical control plane:
+Read first:
+- `.blackgold/control-plane.json`
+- `https://github.com/ProjetosCosaNostra/CosaNostra-AI/blob/main/control-plane/AGENT_ENTRYPOINT.md`
+- `https://github.com/ProjetosCosaNostra/CosaNostra-AI/blob/main/control-plane/CURRENT_TRUTH.json`
 
-https://github.com/ProjetosCosaNostra/CosaNostra-AI/blob/main/control-plane/BLACKGOLD_CONTROL_PLANE.md
-
-Global execution rule:
+Global execution invariants:
 - Never open visible CMD windows for project automation.
 - Prefer hidden/background execution.
-- Do not kill required build subprocesses just to hide a window.
-- Keep ecosystem-wide rules centralized in the control plane instead of duplicating them here.
+- Preserve required Gradle/build/script subprocesses.
+- Consult the canonical Control Plane before changing automation behavior.
+- Do not reimplement global ecosystem configuration locally.
