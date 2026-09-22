@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "system": "BlackGold Control Plane",
+  "channel": "stable",
+  "canonical_repository": "ProjetosCosaNostra/CosaNostra-AI",
+  "canonical_contract": "control-plane/BLACKGOLD_CONTROL_PLANE.md",
+  "latest": "control-plane/LATEST.json",
+  "permanent_installer": "control-plane/install.ps1",
+  "global_rules": [
+    "Never open visible CMD windows for project automation.",
+    "Prefer hidden/background execution.",
+    "Preserve required build subprocesses.",
+    "Consult the canonical control plane before changing automation behavior."
+  ]
+}
